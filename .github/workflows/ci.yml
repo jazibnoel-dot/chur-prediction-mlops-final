@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt flake8
+
+      - name: Lint
+        run: flake8 src tests --max-line-length=100 --extend-ignore=E501
+
+      - name: Run smoke tests
+        env:
+          APP_SECRET_KEY: test-secret-key
+          MODEL_PATH: models/churn_model.pkl
+          DATA_PATH: data/raw/data.csv
+          MONGODB_URI: mongodb://mock
+        run: pytest tests/smoke_test.py -v
+
+      - name: Build Docker image
+        run: docker build -t telecom-churn:test .

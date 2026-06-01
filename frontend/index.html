@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Telecom Churn Prediction</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-10">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-bold text-sky-400">Telecom Churn Prediction</h1>
+        <p class="text-sm text-slate-400">ML-powered customer retention insights</p>
+      </div>
+      <nav class="flex gap-2">
+        <button data-tab="single" class="tab-btn px-4 py-2 rounded-lg bg-sky-600 text-white">Single Prediction</button>
+        <button data-tab="bulk" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700">Bulk Prediction</button>
+        <button data-tab="dashboard" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700">Dashboard</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <section id="panel-single" class="tab-panel space-y-6">
+      <form id="predict-form" class="grid md:grid-cols-2 gap-4 bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <label class="block text-sm">Customer ID<input name="customerID" required class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2" value="7590-VHVEG" /></label>
+        <label class="block text-sm">Gender<select name="gender" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2"><option>Female</option><option>Male</option></select></label>
+        <label class="block text-sm">Senior Citizen<select name="SeniorCitizen" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2"><option value="0">No</option><option value="1">Yes</option></select></label>
+        <label class="block text-sm">Partner<select name="Partner" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2"><option>Yes</option><option>No</option></select></label>
+        <label class="block text-sm">Dependents<select name="Dependents" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2"><option>No</option><option>Yes</option></select></label>
+        <label class="block text-sm">Tenure (months)<input name="tenure" type="number" min="0" required class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2" value="1" /></label>
+        <label class="block text-sm">Phone Service<select name="PhoneService" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2"><option>Yes</option><option>No</option></select></label>
+        <label class="block text-sm">Multiple Lines<input name="MultipleLines" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2" value="No" /></label>
+        <label class="block text-sm">Internet Service<select name="InternetService" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2"><option>No</option><option>DSL</option><option>Fiber optic</option></select></label>
+        <label class="block text-sm">Online Security<input name="OnlineSecurity" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2" value="No" /></label>
+        <label class="block text-sm">Tech Support<input name="TechSupport" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2" value="No" /></label>
+        <label class="block text-sm">Contract<select name="Contract" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2"><option>Month-to-month</option><option>One year</option><option>Two year</option></select></label>
+        <label class="block text-sm">Paperless Billing<select name="PaperlessBilling" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2"><option>Yes</option><option>No</option></select></label>
+        <label class="block text-sm">Payment Method<input name="PaymentMethod" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2" value="Electronic check" /></label>
+        <label class="block text-sm">Monthly Charges<input name="MonthlyCharges" type="number" step="0.01" required class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2" value="29.85" /></label>
+        <label class="block text-sm">Total Charges<input name="TotalCharges" type="number" step="0.01" required class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2" value="29.85" /></label>
+        <label class="block text-sm md:col-span-2">API Key (optional if not configured)<input id="api-key" type="password" placeholder="X-API-Key" class="mt-1 w-full rounded bg-slate-800 border border-slate-700 px-3 py-2" /></label>
+        <div class="md:col-span-2">
+          <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-semibold">Predict Churn</button>
+        </div>
+      </form>
+      <div id="single-result" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <h2 class="text-lg font-semibold mb-4">Prediction Result</h2>
+        <p id="result-summary" class="mb-4"></p>
+        <div class="h-4 rounded-full bg-slate-800 overflow-hidden">
+          <div id="risk-bar" class="h-full transition-all duration-500"></div>
+        </div>
+        <p id="risk-label" class="text-sm mt-2 text-slate-400"></p>
+      </div>
+    </section>
+
+    <section id="panel-bulk" class="tab-panel hidden space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <input id="bulk-file" type="file" accept=".csv" class="block w-full text-sm" />
+        <button id="bulk-upload" class="px-6 py-3 rounded-lg bg-sky-600 hover:bg-sky-500 font-semibold">Upload & Predict</button>
+        <button id="bulk-download" class="px-6 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 font-semibold hidden">Download Results CSV</button>
+      </div>
+      <div class="overflow-x-auto bg-slate-900 border border-slate-800 rounded-xl">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-800"><tr><th class="px-4 py-3 text-left">Customer ID</th><th class="px-4 py-3 text-left">Probability</th><th class="px-4 py-3 text-left">Prediction</th></tr></thead>
+          <tbody id="bulk-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="panel-dashboard" class="tab-panel hidden space-y-6">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4" id="metrics-cards"></div>
+      <div class="overflow-x-auto bg-slate-900 border border-slate-800 rounded-xl">
+        <h2 class="px-4 py-3 font-semibold border-b border-slate-800">Recent Predictions</h2>
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-800"><tr><th class="px-4 py-3 text-left">Customer</th><th class="px-4 py-3 text-left">Probability</th><th class="px-4 py-3 text-left">Churn</th><th class="px-4 py-3 text-left">Time</th></tr></thead>
+          <tbody id="history-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const panels = { single: document.getElementById('panel-single'), bulk: document.getElementById('panel-bulk'), dashboard: document.getElementById('panel-dashboard') };
+    let bulkResults = [];
+    let dashboardTimer = null;
+
+    function headers() {
+      const key = document.getElementById('api-key')?.value;
+      const h = { 'Content-Type': 'application/json' };
+      if (key) h['X-API-Key'] = key;
+      return h;
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.className = 'tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700');
+        btn.className = 'tab-btn px-4 py-2 rounded-lg bg-sky-600 text-white';
+        Object.entries(panels).forEach(([name, el]) => el.classList.toggle('hidden', name !== tab));
+        if (tab === 'dashboard') startDashboardRefresh();
+        else stopDashboardRefresh();
+      });
+    });
+
+    function riskColor(probability) {
+      if (probability < 0.35) return 'bg-emerald-500';
+      if (probability < 0.65) return 'bg-amber-500';
+      return 'bg-rose-500';
+    }
+
+    document.getElementById('predict-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      body.SeniorCitizen = Number(body.SeniorCitizen);
+      body.tenure = Number(body.tenure);
+      body.MonthlyCharges = Number(body.MonthlyCharges);
+      body.TotalCharges = Number(body.TotalCharges);
+
+      const res = await fetch('/predict', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) { alert(data.detail || 'Prediction failed'); return; }
+
+      document.getElementById('single-result').classList.remove('hidden');
+      const prob = data.churn_probability;
+      const churn = data.churn_prediction;
+      document.getElementById('result-summary').textContent = `Customer ${data.customer_id}: ${churn ? 'Likely to churn' : 'Likely to stay'} (${(prob * 100).toFixed(1)}%)`;
+      const bar = document.getElementById('risk-bar');
+      bar.style.width = `${Math.round(prob * 100)}%`;
+      bar.className = `h-full transition-all duration-500 ${riskColor(prob)}`;
+      document.getElementById('risk-label').textContent = prob < 0.35 ? 'Low risk' : prob < 0.65 ? 'Medium risk' : 'High risk';
+    });
+
+    document.getElementById('bulk-upload').addEventListener('click', async () => {
+      const fileInput = document.getElementById('bulk-file');
+      if (!fileInput.files.length) { alert('Choose a CSV file'); return; }
+      const form = new FormData();
+      form.append('file', fileInput.files[0]);
+      const h = {};
+      const key = document.getElementById('api-key')?.value;
+      if (key) h['X-API-Key'] = key;
+      const res = await fetch('/predict/batch', { method: 'POST', headers: h, body: form });
+      const data = await res.json();
+      if (!res.ok) { alert(data.detail || 'Batch prediction failed'); return; }
+      bulkResults = data.predictions;
+      const tbody = document.getElementById('bulk-table-body');
+      tbody.innerHTML = bulkResults.map(r => `<tr class="border-t border-slate-800"><td class="px-4 py-2">${r.customer_id}</td><td class="px-4 py-2">${(r.churn_probability * 100).toFixed(1)}%</td><td class="px-4 py-2">${r.churn_prediction ? 'Churn' : 'Stay'}</td></tr>`).join('');
+      document.getElementById('bulk-download').classList.remove('hidden');
+    });
+
+    document.getElementById('bulk-download').addEventListener('click', () => {
+      const rows = [['customer_id', 'churn_probability', 'churn_prediction'], ...bulkResults.map(r => [r.customer_id, r.churn_probability, r.churn_prediction])];
+      const csv = rows.map(r => r.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'churn_predictions.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    async function loadDashboard() {
+      const metricsRes = await fetch('/metrics', { headers: headers() });
+      const metrics = metricsRes.ok ? await metricsRes.json() : null;
+      const cards = document.getElementById('metrics-cards');
+      const items = [
+        ['ROC-AUC', metrics?.roc_auc],
+        ['Precision', metrics?.precision],
+        ['Recall', metrics?.recall],
+        ['F1', metrics?.f1],
+      ];
+      cards.innerHTML = items.map(([label, value]) => `
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p class="text-slate-400 text-sm">${label}</p>
+          <p class="text-2xl font-bold text-sky-400">${value != null ? Number(value).toFixed(4) : 'N/A'}</p>
+        </div>`).join('');
+
+      const histRes = await fetch('/predictions?limit=20', { headers: headers() });
+      const history = histRes.ok ? await histRes.json() : [];
+      document.getElementById('history-table-body').innerHTML = (history.length ? history : []).map(row => `
+        <tr class="border-t border-slate-800">
+          <td class="px-4 py-2">${row.customerID || row.customer_id || '-'}</td>
+          <td class="px-4 py-2">${row.churn_probability != null ? (row.churn_probability * 100).toFixed(1) + '%' : '-'}</td>
+          <td class="px-4 py-2">${row.churn_prediction ? 'Churn' : 'Stay'}</td>
+          <td class="px-4 py-2">${row.timestamp ? new Date(row.timestamp).toLocaleString() : '-'}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="px-4 py-6 text-slate-500">No predictions logged yet.</td></tr>';
+    }
+
+    function startDashboardRefresh() {
+      loadDashboard();
+      dashboardTimer = setInterval(loadDashboard, 60000);
+    }
+    function stopDashboardRefresh() {
+      if (dashboardTimer) clearInterval(dashboardTimer);
+      dashboardTimer = null;
+    }
+  </script>
+</body>
+</html>

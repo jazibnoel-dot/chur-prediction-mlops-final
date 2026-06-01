@@ -1,0 +1,25 @@
+{
+  "model_version": "v1.0",
+  "trained_at": "2026-05-31T09:42:48.811557+00:00",
+  "best_model": "XGBClassifier",
+  "best_params": {
+    "subsample": 1.0,
+    "n_estimators": 300,
+    "min_child_weight": 1,
+    "max_depth": 9,
+    "learning_rate": 0.1,
+    "colsample_bytree": 1.0
+  },
+  "xgboost": {
+    "roc_auc": 0.9334733599383883,
+    "precision": 0.8390697674418605,
+    "recall": 0.8714975845410629,
+    "f1": 0.8549763033175355
+  },
+  "random_forest_baseline": {
+    "roc_auc": 0.9340605381689189,
+    "precision": 0.8462962962962963,
+    "recall": 0.8830917874396135,
+    "f1": 0.8643026004728133
+  }
+}

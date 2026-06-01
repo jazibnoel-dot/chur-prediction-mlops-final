@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+pandas
+numpy
+scikit-learn
+xgboost
+imbalanced-learn
+pymongo
+motor
+python-dotenv
+pydantic
+joblib
+pytest
+httpx
+huggingface_hub
