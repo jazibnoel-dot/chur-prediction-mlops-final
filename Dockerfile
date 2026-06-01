@@ -6,7 +6,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+ENV PIP_DEFAULT_TIMEOUT=600
+RUN pip install --no-cache-dir --default-timeout=600 -r requirements.txt
 
 COPY src/ ./src/
 COPY frontend/ ./frontend/

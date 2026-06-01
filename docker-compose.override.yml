@@ -1,0 +1,5 @@
+# Local override: run Docker on 8001 while uvicorn uses 8000.
+services:
+  app:
+    ports:
+      - "8001:8000"
