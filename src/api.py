@@ -65,15 +65,21 @@ def _load_artifacts() -> None:
     if missing_local_artifacts and can_download_from_hub:
         from src.model_manager import download_model_from_hub
 
-        print("Downloading model artifacts from Hugging Face Hub...")
-        # Token is optional for public repos; required for private repos.
-        download_model_from_hub(
-            repo_id=hf_repo_id,
-            token=hf_token if has_valid_token else None,
-        )
+        print(f"Downloading model artifacts from Hugging Face Hub repo: {hf_repo_id}")
+        try:
+            download_model_from_hub(
+                repo_id=hf_repo_id,
+                token=hf_token if has_valid_token else None,
+            )
+        except Exception as exc:
+            print(f"Hub download failed: {exc}")
 
-    if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
+    if not MODEL_PATH.exists() or not preprocessor_path.exists():
+        raise FileNotFoundError(
+            "Model artifacts not found. Expected "
+            f"{MODEL_PATH} and {preprocessor_path}. "
+            "Include models/*.pkl in the Space repo or set HF_REPO_ID (+ HF_TOKEN if private)."
+        )
     app_state.model = joblib.load(MODEL_PATH)
     app_state.preprocessor = load_preprocessor()
     app_state.model_version = _load_model_version()

@@ -50,6 +50,17 @@ def main() -> None:
                 ".env",
             ],
         )
+        # .gitignore excludes *.pkl, so upload model artifacts explicitly.
+        for name in ("churn_model.pkl", "preprocessor.pkl", "model_metrics.json"):
+            artifact = PROJECT_ROOT / "models" / name
+            if artifact.exists():
+                api.upload_file(
+                    path_or_fileobj=str(artifact),
+                    path_in_repo=f"models/{name}",
+                    repo_id=space_id,
+                    repo_type="space",
+                )
+                print(f"Uploaded models/{name} to Space {space_id}")
         print(f"Deployed Space: https://huggingface.co/spaces/{space_id}")
         print(f"Live URL: https://{space_id.replace('/', '-')}.hf.space")
 

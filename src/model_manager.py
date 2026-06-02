@@ -1,6 +1,7 @@
 """Download and hot-reload models from Hugging Face Hub."""
 
 import os
+import shutil
 from pathlib import Path
 
 import joblib
@@ -11,6 +12,24 @@ load_dotenv()
 
 MODEL_PATH = Path(os.getenv("MODEL_PATH", "models/churn_model.pkl"))
 PREPROCESSOR_PATH = Path("models/preprocessor.pkl")
+
+
+def _download_file(
+    repo_id: str,
+    filename: str,
+    destination: Path,
+    token: str | None,
+) -> Path:
+    """Download one file from a model repo into an exact destination path."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    cached_path = hf_hub_download(
+        repo_id=repo_id,
+        filename=filename,
+        repo_type="model",
+        token=token or None,
+    )
+    shutil.copy2(cached_path, destination)
+    return destination
 
 
 def download_model_from_hub(
@@ -25,28 +44,11 @@ def download_model_from_hub(
     if not repo_id:
         raise ValueError("HF_REPO_ID is not set.")
 
-    model_path.parent.mkdir(parents=True, exist_ok=True)
-    preprocessor_path.parent.mkdir(parents=True, exist_ok=True)
+    _download_file(repo_id, model_path.name, model_path, token)
+    _download_file(repo_id, preprocessor_path.name, preprocessor_path, token)
 
-    downloaded_model = hf_hub_download(
-        repo_id=repo_id,
-        filename=model_path.name,
-        repo_type="model",
-        token=token or None,
-        local_dir=str(model_path.parent),
-        local_dir_use_symlinks=False,
-    )
-    downloaded_preprocessor = hf_hub_download(
-        repo_id=repo_id,
-        filename=preprocessor_path.name,
-        repo_type="model",
-        token=token or None,
-        local_dir=str(preprocessor_path.parent),
-        local_dir_use_symlinks=False,
-    )
-
-    model = joblib.load(downloaded_model)
-    preprocessor = joblib.load(downloaded_preprocessor)
+    model = joblib.load(model_path)
+    preprocessor = joblib.load(preprocessor_path)
     return model, preprocessor
 
 

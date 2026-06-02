@@ -1,7 +1,10 @@
 .env
 venv/
 __pycache__/
+# Ignore pickle artifacts except trained model files needed for deploy
 *.pkl
+!models/churn_model.pkl
+!models/preprocessor.pkl
 *.pyc
 data/raw/*.csv
 !data/raw/data.csv
