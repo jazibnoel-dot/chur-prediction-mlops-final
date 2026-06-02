@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from huggingface_hub import HfApi
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
+load_dotenv(PROJECT_ROOT / ".env", override=True)
 
 
 def main() -> None:

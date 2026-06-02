@@ -58,12 +58,19 @@ def _load_artifacts() -> None:
     hf_token = os.getenv("HF_TOKEN", "")
     hf_repo_id = os.getenv("HF_REPO_ID", "")
 
-    if (not MODEL_PATH.exists() or not preprocessor_path.exists()) and hf_token and hf_repo_id:
-        if hf_token != "your_huggingface_token_here":
-            from src.model_manager import download_model_from_hub
+    missing_local_artifacts = not MODEL_PATH.exists() or not preprocessor_path.exists()
+    has_valid_token = bool(hf_token) and hf_token != "your_huggingface_token_here"
+    can_download_from_hub = bool(hf_repo_id)
 
-            print("Downloading model artifacts from Hugging Face Hub...")
-            download_model_from_hub()
+    if missing_local_artifacts and can_download_from_hub:
+        from src.model_manager import download_model_from_hub
+
+        print("Downloading model artifacts from Hugging Face Hub...")
+        # Token is optional for public repos; required for private repos.
+        download_model_from_hub(
+            repo_id=hf_repo_id,
+            token=hf_token if has_valid_token else None,
+        )
 
     if not MODEL_PATH.exists():
         raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
