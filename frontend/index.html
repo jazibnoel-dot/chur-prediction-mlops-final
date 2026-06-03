@@ -13,9 +13,10 @@
         <h1 class="text-2xl font-bold text-sky-400">Telecom Churn Prediction</h1>
         <p class="text-sm text-slate-400">ML-powered customer retention insights</p>
       </div>
-      <nav class="flex gap-2">
+      <nav class="flex flex-wrap gap-2">
         <button data-tab="single" class="tab-btn px-4 py-2 rounded-lg bg-sky-600 text-white">Single Prediction</button>
         <button data-tab="bulk" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700">Bulk Prediction</button>
+        <button data-tab="retrain" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700">Retrain Model</button>
         <button data-tab="dashboard" class="tab-btn px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700">Dashboard</button>
       </nav>
     </div>
@@ -69,8 +70,41 @@
       </div>
     </section>
 
+    <section id="panel-retrain" class="tab-panel hidden space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <h2 class="text-lg font-semibold text-violet-300">Current Model Performance</h2>
+        <p id="retrain-model-version" class="text-sm text-slate-400">Loading metrics...</p>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4" id="retrain-metrics-cards"></div>
+        <p id="retrain-queue-status" class="text-sm text-slate-400"></p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <h2 class="text-lg font-semibold">Upload Training CSV</h2>
+        <p class="text-sm text-slate-400">
+          CSV must include all required columns (including <code class="text-sky-300">Churn</code>).
+          The pipeline runs: data validation → preprocessing → SMOTE → XGBoost training → model update.
+        </p>
+        <input id="retrain-file" type="file" accept=".csv" class="block w-full text-sm" />
+        <label class="flex items-center gap-2 text-sm">
+          <input id="force-retrain" type="checkbox" checked class="rounded" />
+          Train immediately (ignore queue threshold)
+        </label>
+        <button id="retrain-submit" class="px-6 py-3 rounded-lg bg-violet-600 hover:bg-violet-500 font-semibold">
+          Upload &amp; Retrain Model
+        </button>
+        <p id="retrain-progress" class="hidden text-sm text-amber-300">Training in progress... this may take several minutes.</p>
+      </div>
+
+      <div id="retrain-result" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-2">
+        <h2 class="text-lg font-semibold">Retrain Result</h2>
+        <p id="retrain-result-message" class="text-slate-200"></p>
+        <div id="retrain-result-metrics" class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-2"></div>
+      </div>
+    </section>
+
     <section id="panel-dashboard" class="tab-panel hidden space-y-6">
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4" id="metrics-cards"></div>
+      <p id="dashboard-model-version" class="text-sm text-slate-400"></p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4" id="metrics-cards"></div>
       <div class="overflow-x-auto bg-slate-900 border border-slate-800 rounded-xl">
         <h2 class="px-4 py-3 font-semibold border-b border-slate-800">Recent Predictions</h2>
         <table class="min-w-full text-sm">
@@ -82,15 +116,17 @@
   </main>
 
   <script>
-    const panels = { single: document.getElementById('panel-single'), bulk: document.getElementById('panel-bulk'), dashboard: document.getElementById('panel-dashboard') };
+    const panels = {
+      single: document.getElementById('panel-single'),
+      bulk: document.getElementById('panel-bulk'),
+      retrain: document.getElementById('panel-retrain'),
+      dashboard: document.getElementById('panel-dashboard'),
+    };
     let bulkResults = [];
     let dashboardTimer = null;
 
     function headers() {
-      const key = document.getElementById('api-key')?.value;
-      const h = { 'Content-Type': 'application/json' };
-      if (key) h['X-API-Key'] = key;
-      return h;
+      return apiKeyHeaders(true);
     }
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -101,7 +137,84 @@
         Object.entries(panels).forEach(([name, el]) => el.classList.toggle('hidden', name !== tab));
         if (tab === 'dashboard') startDashboardRefresh();
         else stopDashboardRefresh();
+        if (tab === 'retrain') loadRetrainPanel();
       });
+    });
+
+    function apiKeyHeaders(includeJson = false) {
+      const key = document.getElementById('api-key')?.value;
+      const h = includeJson ? { 'Content-Type': 'application/json' } : {};
+      if (key) h['X-API-Key'] = key;
+      return h;
+    }
+
+    function renderMetricCards(containerId, metrics) {
+      const items = [
+        ['Accuracy', metrics?.accuracy],
+        ['ROC-AUC', metrics?.roc_auc],
+        ['Precision', metrics?.precision],
+        ['Recall', metrics?.recall],
+        ['F1 Score', metrics?.f1],
+      ];
+      document.getElementById(containerId).innerHTML = items.map(([label, value]) => `
+        <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
+          <p class="text-slate-400 text-sm">${label}</p>
+          <p class="text-2xl font-bold text-sky-400">${value != null ? Number(value).toFixed(4) : 'N/A'}</p>
+        </div>`).join('');
+    }
+
+    async function loadRetrainPanel() {
+      const statusRes = await fetch('/retrain/status', { headers: apiKeyHeaders() });
+      if (statusRes.ok) {
+        const status = await statusRes.json();
+        const m = status.current_metrics;
+        document.getElementById('retrain-model-version').textContent = m?.model_version
+          ? `Model version: ${m.model_version}${m.trained_at ? ' · trained ' + new Date(m.trained_at).toLocaleString() : ''}`
+          : 'No trained metrics found yet.';
+        renderMetricCards('retrain-metrics-cards', m);
+        document.getElementById('retrain-queue-status').textContent =
+          `Retrain queue: ${status.pending_rows}/${status.retrain_threshold} pending rows` +
+          (status.rows_until_retrain > 0 ? ` (${status.rows_until_retrain} more needed for automatic retrain)` : ' (threshold met)');
+      }
+    }
+
+    document.getElementById('retrain-submit').addEventListener('click', async () => {
+      const fileInput = document.getElementById('retrain-file');
+      if (!fileInput.files.length) { alert('Choose a training CSV file'); return; }
+
+      const form = new FormData();
+      form.append('file', fileInput.files[0]);
+      const force = document.getElementById('force-retrain').checked;
+      const progress = document.getElementById('retrain-progress');
+      const resultBox = document.getElementById('retrain-result');
+      const submitBtn = document.getElementById('retrain-submit');
+
+      progress.classList.remove('hidden');
+      resultBox.classList.add('hidden');
+      submitBtn.disabled = true;
+
+      try {
+        const res = await fetch(`/retrain?force_retrain=${force}`, {
+          method: 'POST',
+          headers: apiKeyHeaders(),
+          body: form,
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail || 'Retraining failed'); return; }
+
+        resultBox.classList.remove('hidden');
+        document.getElementById('retrain-result-message').textContent = data.message;
+        if (data.retrained) {
+          renderMetricCards('retrain-result-metrics', data);
+          await loadRetrainPanel();
+        } else {
+          document.getElementById('retrain-result-metrics').innerHTML = '';
+          await loadRetrainPanel();
+        }
+      } finally {
+        progress.classList.add('hidden');
+        submitBtn.disabled = false;
+      }
     });
 
     function riskColor(probability) {
@@ -138,10 +251,7 @@
       if (!fileInput.files.length) { alert('Choose a CSV file'); return; }
       const form = new FormData();
       form.append('file', fileInput.files[0]);
-      const h = {};
-      const key = document.getElementById('api-key')?.value;
-      if (key) h['X-API-Key'] = key;
-      const res = await fetch('/predict/batch', { method: 'POST', headers: h, body: form });
+      const res = await fetch('/predict/batch', { method: 'POST', headers: apiKeyHeaders(), body: form });
       const data = await res.json();
       if (!res.ok) { alert(data.detail || 'Batch prediction failed'); return; }
       bulkResults = data.predictions;
@@ -166,17 +276,13 @@
       const metricsRes = await fetch('/metrics', { headers: headers() });
       const metrics = metricsRes.ok ? await metricsRes.json() : null;
       const cards = document.getElementById('metrics-cards');
-      const items = [
-        ['ROC-AUC', metrics?.roc_auc],
-        ['Precision', metrics?.precision],
-        ['Recall', metrics?.recall],
-        ['F1', metrics?.f1],
-      ];
-      cards.innerHTML = items.map(([label, value]) => `
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <p class="text-slate-400 text-sm">${label}</p>
-          <p class="text-2xl font-bold text-sky-400">${value != null ? Number(value).toFixed(4) : 'N/A'}</p>
-        </div>`).join('');
+      renderMetricCards('metrics-cards', metrics);
+      if (metrics?.model_version) {
+        const versionEl = document.getElementById('dashboard-model-version');
+        if (versionEl) {
+          versionEl.textContent = `Model ${metrics.model_version}`;
+        }
+      }
 
       const histRes = await fetch('/predictions?limit=20', { headers: headers() });
       const history = histRes.ok ? await histRes.json() : [];

@@ -7,11 +7,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
-import numpy as np
 from dotenv import load_dotenv
 from huggingface_hub import HfApi
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
+    accuracy_score,
     classification_report,
     confusion_matrix,
     f1_score,
@@ -25,8 +25,8 @@ from xgboost import XGBClassifier
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.data_loader import load_data
-from src.preprocess import preprocess
+from src.data_loader import load_data  # noqa: E402
+from src.preprocess import preprocess  # noqa: E402
 
 MODEL_PATH = Path(os.getenv("MODEL_PATH", "models/churn_model.pkl"))
 PREPROCESSOR_PATH = Path("models/preprocessor.pkl")
@@ -56,6 +56,7 @@ def _evaluate_model(name: str, model, x_test, y_test) -> dict:
     print(confusion_matrix(y_test, y_pred))
 
     return {
+        "accuracy": float(accuracy_score(y_test, y_pred)),
         "roc_auc": float(roc_auc_score(y_test, y_proba)),
         "precision": float(precision_score(y_test, y_pred)),
         "recall": float(recall_score(y_test, y_pred)),

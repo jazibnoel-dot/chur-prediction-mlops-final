@@ -10,7 +10,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from src import db
 from src.preprocess import load_preprocessor, transform_features
-from src.retrain import run_retraining
+from src.retrain import RETRAIN_THRESHOLD, run_retraining
 from src.schemas import (
     BatchPredictionItem,
     BatchPredictionResponse,
@@ -26,6 +26,8 @@ from src.schemas import (
     HealthResponse,
     MetricsResponse,
     PredictionResponse,
+    RetrainResultResponse,
+    RetrainStatusResponse,
 )
 
 load_dotenv()
@@ -44,6 +46,34 @@ class AppState:
 
 
 app_state = AppState()
+
+
+def _metrics_from_record(data: dict, source: str) -> MetricsResponse:
+    xgb = data.get("xgboost", data)
+    return MetricsResponse(
+        model_version=data.get("model_version"),
+        accuracy=xgb.get("accuracy"),
+        roc_auc=xgb.get("roc_auc"),
+        precision=xgb.get("precision"),
+        recall=xgb.get("recall"),
+        f1=xgb.get("f1"),
+        trained_at=data.get("trained_at"),
+        source=source,
+    )
+
+
+async def _get_current_metrics() -> MetricsResponse | None:
+    if os.getenv("MONGODB_URI"):
+        try:
+            latest = await db.get_latest_metrics()
+            if latest:
+                return _metrics_from_record(latest, "mongodb")
+        except Exception:
+            pass
+    if METRICS_PATH.exists():
+        with METRICS_PATH.open(encoding="utf-8") as handle:
+            return _metrics_from_record(json.load(handle), "file")
+    return None
 
 
 def _load_model_version() -> str:
@@ -238,42 +268,34 @@ async def list_predictions(skip: int = 0, limit: int = 20):
 
 @app.get("/metrics", response_model=MetricsResponse)
 async def metrics():
-    if os.getenv("MONGODB_URI"):
-        try:
-            latest = await db.get_latest_metrics()
-            if latest:
-                xgb = latest.get("xgboost", latest)
-                return MetricsResponse(
-                    model_version=latest.get("model_version"),
-                    roc_auc=xgb.get("roc_auc"),
-                    precision=xgb.get("precision"),
-                    recall=xgb.get("recall"),
-                    f1=xgb.get("f1"),
-                    trained_at=latest.get("trained_at"),
-                    source="mongodb",
-                )
-        except Exception:
-            pass
-
-    if METRICS_PATH.exists():
-        with METRICS_PATH.open(encoding="utf-8") as handle:
-            data = json.load(handle)
-        xgb = data.get("xgboost", {})
-        return MetricsResponse(
-            model_version=data.get("model_version"),
-            roc_auc=xgb.get("roc_auc"),
-            precision=xgb.get("precision"),
-            recall=xgb.get("recall"),
-            f1=xgb.get("f1"),
-            trained_at=data.get("trained_at"),
-            source="file",
-        )
-
+    current = await _get_current_metrics()
+    if current:
+        return current
     raise HTTPException(status_code=404, detail="No metrics available")
 
 
-@app.post("/retrain")
-async def retrain(file: UploadFile = File(...)):
+@app.get("/retrain/status", response_model=RetrainStatusResponse)
+async def retrain_status():
+    pending = 0
+    if os.getenv("MONGODB_URI"):
+        try:
+            pending = await db.count_pending_retrain_rows()
+        except Exception:
+            pending = 0
+    rows_until = max(0, RETRAIN_THRESHOLD - pending)
+    return RetrainStatusResponse(
+        retrain_threshold=RETRAIN_THRESHOLD,
+        pending_rows=pending,
+        rows_until_retrain=rows_until,
+        current_metrics=await _get_current_metrics(),
+    )
+
+
+@app.post("/retrain", response_model=RetrainResultResponse)
+async def retrain(
+    file: UploadFile = File(...),
+    force_retrain: bool = Query(default=False),
+):
     upload_dir = PROJECT_ROOT / "data" / "processed"
     upload_dir.mkdir(parents=True, exist_ok=True)
     destination = upload_dir / f"retrain_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.csv"
@@ -281,11 +303,11 @@ async def retrain(file: UploadFile = File(...)):
     destination.write_bytes(content)
 
     try:
-        result = await run_retraining(destination)
+        result = await run_retraining(destination, force=force_retrain)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     if result.get("retrained"):
         _load_artifacts()
 
-    return result
+    return RetrainResultResponse(**result)

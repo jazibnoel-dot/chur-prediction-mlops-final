@@ -55,9 +55,32 @@ class HealthResponse(BaseModel):
 
 class MetricsResponse(BaseModel):
     model_version: str | None = None
+    accuracy: float | None = None
     roc_auc: float | None = None
     precision: float | None = None
     recall: float | None = None
     f1: float | None = None
     trained_at: str | None = None
     source: str
+
+
+class RetrainStatusResponse(BaseModel):
+    retrain_threshold: int
+    pending_rows: int
+    rows_until_retrain: int
+    current_metrics: MetricsResponse | None = None
+
+
+class RetrainResultResponse(BaseModel):
+    queued_rows: int
+    pending_rows: int
+    retrain_threshold: int
+    retrained: bool
+    message: str
+    model_version: str | None = None
+    accuracy: float | None = None
+    roc_auc: float | None = None
+    precision: float | None = None
+    recall: float | None = None
+    f1: float | None = None
+    upload_error: str | None = None

@@ -8,8 +8,8 @@ from pathlib import Path
 import joblib
 import pandas as pd
 from dotenv import load_dotenv
-from huggingface_hub import HfApi
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, train_test_split
+from xgboost import XGBClassifier
 
 from src.data_loader import load_data
 from src.db import (
@@ -19,10 +19,8 @@ from src.db import (
     mark_retrain_queue_done,
     save_metrics,
 )
-from src.preprocess import PREPROCESSOR_PATH, preprocess
+from src.preprocess import preprocess
 from src.train import MODEL_PATH, METRICS_PATH, XGB_PARAM_DIST, _evaluate_model, _upload_to_huggingface
-from xgboost import XGBClassifier
-from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
 
 load_dotenv()
 
@@ -40,21 +38,30 @@ def _next_version(current: str | None) -> str:
         return "v1.1"
 
 
-async def run_retraining(new_csv_path: str | Path) -> dict:
-    """Queue new data and retrain when the pending threshold is met."""
+async def run_retraining(new_csv_path: str | Path, force: bool = False) -> dict:
+    """Queue new data and retrain when the pending threshold is met (or force=True)."""
     new_df = load_data(new_csv_path)
     queue_rows = new_df.to_dict(orient="records")
-    queued = await add_to_retrain_queue(queue_rows)
-    pending = await count_pending_retrain_rows()
+    queued = 0
+    pending = len(queue_rows)
+
+    if os.getenv("MONGODB_URI"):
+        try:
+            queued = await add_to_retrain_queue(queue_rows)
+            pending = await count_pending_retrain_rows()
+        except Exception as exc:
+            if not force:
+                raise RuntimeError(f"Could not update retrain queue: {exc}") from exc
 
     result = {
-        "queued_rows": queued,
+        "queued_rows": queued or len(queue_rows),
         "pending_rows": pending,
+        "retrain_threshold": RETRAIN_THRESHOLD,
         "retrained": False,
         "message": "",
     }
 
-    if pending < RETRAIN_THRESHOLD:
+    if not force and pending < RETRAIN_THRESHOLD:
         result["message"] = (
             f"Queued {queued} row(s). {pending}/{RETRAIN_THRESHOLD} pending "
             "rows required before retraining."
@@ -113,6 +120,11 @@ async def run_retraining(new_csv_path: str | Path) -> dict:
         result["message"] = (
             f"Retraining skipped: new ROC-AUC {new_auc:.4f} is below current {current_auc:.4f}."
         )
+        result["roc_auc"] = new_auc
+        result["accuracy"] = new_metrics.get("accuracy")
+        result["precision"] = new_metrics.get("precision")
+        result["recall"] = new_metrics.get("recall")
+        result["f1"] = new_metrics.get("f1")
         return result
 
     model_version = _next_version(
@@ -148,7 +160,11 @@ async def run_retraining(new_csv_path: str | Path) -> dict:
         {
             "retrained": True,
             "model_version": model_version,
+            "accuracy": new_metrics.get("accuracy"),
             "roc_auc": new_auc,
+            "precision": new_metrics.get("precision"),
+            "recall": new_metrics.get("recall"),
+            "f1": new_metrics.get("f1"),
             "message": f"Retraining complete. New model version: {model_version}",
         }
     )
